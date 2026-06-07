@@ -1,6 +1,6 @@
 # 启动台（launch-box）
 
-`launch-box` 是一个 macOS 启动台应用，用户可见名称为 **启动台**。
+`launch-box` 是一个 macOS 启动台替代工具，用户可见名称为 **启动台**。也可以理解为一个用 SwiftUI 构建的 Launchpad replacement / app launcher / menu bar launcher。
 
 项目目标是保留旧版 macOS 启动台的直接、快速和可拖拽整理体验，同时补上更实用的搜索、收藏、分类、文件夹、隐藏应用、导入导出和菜单栏入口。
 
