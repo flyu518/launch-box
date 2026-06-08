@@ -51,6 +51,7 @@ struct LauncherOverlayView: View {
     @State private var activeDrag: LauncherDragState?
     @State private var categoryDrag: CategoryDragState?
     @State private var dropTargetFrames: [LauncherDropTarget: CGRect] = [:]
+    @State private var categoryControlFrames: [String: CGRect] = [:]
     @State private var isRescanning = false
 
     var body: some View {
@@ -86,6 +87,9 @@ struct LauncherOverlayView: View {
         .coordinateSpace(name: "launcherOverlay")
         .onPreferenceChange(DropTargetFramePreferenceKey.self) { frames in
             dropTargetFrames = frames
+        }
+        .onPreferenceChange(CategoryControlFramePreferenceKey.self) { frames in
+            categoryControlFrames = frames
         }
         .onAppear {
             DispatchQueue.main.async {
@@ -296,6 +300,7 @@ struct LauncherOverlayView: View {
                 .buttonStyle(.plain)
                 .frame(width: 32, height: 32)
                 .contentShape(Circle())
+                .categoryControlFrame("add-category")
                 .help("新建分类")
             }
             .padding(.horizontal, 8)
@@ -303,6 +308,7 @@ struct LauncherOverlayView: View {
         }
         .frame(height: 36)
         .background(blankDismissArea)
+        .simultaneousGesture(categoryBlankDismissGesture)
     }
 
     private var blankDismissArea: some View {
@@ -324,8 +330,30 @@ struct LauncherOverlayView: View {
             )
     }
 
+    private var categoryBlankDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("launcherOverlay"))
+            .onEnded { value in
+                guard activeDrag == nil,
+                      categoryDrag == nil,
+                      isPrimaryClickOrReleased,
+                      abs(value.translation.width) < 4,
+                      abs(value.translation.height) < 4,
+                      !startsInsideCategoryControl(value.startLocation) else {
+                    return
+                }
+
+                onClose()
+            }
+    }
+
     private var isPrimaryClickOrReleased: Bool {
         NSEvent.pressedMouseButtons == 0 || NSEvent.pressedMouseButtons & 1 == 1
+    }
+
+    private func startsInsideCategoryControl(_ location: CGPoint) -> Bool {
+        categoryControlFrames.values.contains { frame in
+            frame.insetBy(dx: -4, dy: -4).contains(location)
+        }
     }
 
     @ViewBuilder
@@ -464,6 +492,7 @@ struct LauncherOverlayView: View {
                 }
         }
         .buttonStyle(.plain)
+        .categoryControlFrame("section-\(title)")
     }
 
     private func categoryChip(_ category: LaunchCategory) -> some View {
@@ -483,6 +512,7 @@ struct LauncherOverlayView: View {
                 }
         }
         .buttonStyle(.plain)
+        .categoryControlFrame("category-\(category.id)")
         .dropTarget(.category(category.id))
         .dropTargetHighlight(isActive: isActiveDropTarget(.category(category.id)), label: dropTargetLabel(for: category))
         .simultaneousGesture(categoryDragGesture(for: category))
@@ -705,6 +735,17 @@ private struct DropTargetFramePreferenceKey: PreferenceKey {
     }
 }
 
+private struct CategoryControlFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+
+    static func reduce(
+        value: inout [String: CGRect],
+        nextValue: () -> [String: CGRect]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 private extension View {
     func dropTarget(_ target: LauncherDropTarget) -> some View {
         background {
@@ -712,6 +753,17 @@ private extension View {
                 Color.clear.preference(
                     key: DropTargetFramePreferenceKey.self,
                     value: [target: proxy.frame(in: .named("launcherOverlay"))]
+                )
+            }
+        }
+    }
+
+    func categoryControlFrame(_ id: String) -> some View {
+        background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: CategoryControlFramePreferenceKey.self,
+                    value: [id: proxy.frame(in: .named("launcherOverlay"))]
                 )
             }
         }

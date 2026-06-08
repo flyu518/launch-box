@@ -230,6 +230,8 @@ struct AppGridView: View {
                 .background(.regularMaterial, in: Capsule())
         }
         .padding(.horizontal, 8)
+        .contentShape(Rectangle())
+        .simultaneousGesture(blankClickDismissGesture)
     }
 
     private var title: String {
