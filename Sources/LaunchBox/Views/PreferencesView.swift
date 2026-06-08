@@ -11,6 +11,7 @@ struct PreferencesView: View {
     @State private var dataMessageIsError = false
     @State private var launchAtLogin = LoginItemManager.isEnabled
     @State private var isConfirmingReset = false
+    @StateObject private var updateCheck = UpdateCheckModel()
 
     var body: some View {
         ScrollView {
@@ -77,11 +78,50 @@ struct PreferencesView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            GroupBox("关于") {
+                VStack(alignment: .leading, spacing: 10) {
+                    settingsRow(title: "应用", value: AppMetadata.displayName)
+                    settingsRow(title: "版本", value: AppMetadata.versionDisplay)
+
+                    HStack(spacing: 10) {
+                        Button {
+                            Task {
+                                await updateCheck.check()
+                            }
+                        } label: {
+                            if updateCheck.isChecking {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Text("检查更新")
+                            }
+                        }
+                        .disabled(updateCheck.isChecking)
+
+                        Link("GitHub 仓库", destination: AppMetadata.repositoryURL)
+                    }
+                    .font(.callout)
+
+                    if let message = updateCheck.message {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(updateCheck.messageIsError ? .red : .secondary)
+                            .textSelection(.enabled)
+                    }
+
+                    if let availableUpdate = updateCheck.availableUpdate {
+                        Link("下载 \(availableUpdate.version)", destination: availableUpdate.pageURL)
+                            .font(.caption)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Spacer(minLength: 0)
             }
         }
         .padding(24)
-        .frame(minWidth: 560, idealWidth: 560, minHeight: 420)
+        .frame(minWidth: 560, idealWidth: 560, minHeight: 500)
         .onAppear {
             launchAtLogin = LoginItemManager.isEnabled
         }
@@ -134,6 +174,18 @@ struct PreferencesView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmm"
         return "启动台配置-\(formatter.string(from: Date())).json"
+    }
+
+    private func settingsRow(title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(.secondary)
+                .frame(width: 54, alignment: .leading)
+
+            Text(value)
+                .textSelection(.enabled)
+        }
+        .font(.callout)
     }
 
     private func exportData() {

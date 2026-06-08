@@ -6,6 +6,8 @@ PRODUCT_NAME="LaunchBox"
 APP_DISPLAY_NAME="启动台"
 BUNDLE_ID="dev.local.launch-box"
 MIN_SYSTEM_VERSION="14.0"
+APP_VERSION="0.0.1"
+APP_BUILD="1"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -42,6 +44,10 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$APP_DISPLAY_NAME</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$APP_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$APP_BUILD</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>

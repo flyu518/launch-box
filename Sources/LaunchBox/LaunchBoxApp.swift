@@ -11,6 +11,17 @@ struct LaunchBoxApp: App {
                 coordinator.reloadHotKey()
             }
         }
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("关于启动台") {
+                    coordinator.showAbout()
+                }
+
+                Button("检查更新...") {
+                    coordinator.showAbout(checkUpdates: true)
+                }
+            }
+        }
     }
 }
 
@@ -23,6 +34,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate {
     }
     private var statusBarController: StatusBarController?
     private var settingsWindowController: SettingsWindowController?
+    private var aboutWindowController: AboutWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -35,6 +47,12 @@ final class AppCoordinator: NSObject, NSApplicationDelegate {
             },
             onRescan: { [weak self] in
                 self?.store.rescan()
+            },
+            onAbout: { [weak self] in
+                self?.showAbout()
+            },
+            onCheckUpdates: { [weak self] in
+                self?.showAbout(checkUpdates: true)
             },
             onSettings: { [weak self] in
                 self?.showSettings()
@@ -65,12 +83,50 @@ final class AppCoordinator: NSObject, NSApplicationDelegate {
         settingsWindowController?.show()
     }
 
+    func showAbout(checkUpdates: Bool = false) {
+        if aboutWindowController == nil {
+            aboutWindowController = AboutWindowController()
+        }
+
+        aboutWindowController?.show(checkUpdates: checkUpdates)
+    }
+
     func toggleOverlay() {
         overlay.toggle()
     }
 
     func reloadHotKey() {
         hotKey.register(settings: store.library.hotKey)
+    }
+}
+
+@MainActor
+private final class AboutWindowController {
+    private let updateCheck = UpdateCheckModel()
+    private let window: NSWindow
+
+    init() {
+        let hostingController = NSHostingController(
+            rootView: AboutView(updateCheck: updateCheck)
+        )
+
+        window = NSWindow(contentViewController: hostingController)
+        window.title = "关于启动台"
+        window.styleMask = [.titled, .closable]
+        window.minSize = NSSize(width: 420, height: 340)
+        window.isReleasedWhenClosed = false
+        window.center()
+    }
+
+    func show(checkUpdates: Bool = false) {
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+
+        if checkUpdates {
+            Task {
+                await updateCheck.check()
+            }
+        }
     }
 }
 
@@ -102,18 +158,24 @@ private final class StatusBarController: NSObject {
     private let statusItem: NSStatusItem
     private let onPrimaryClick: () -> Void
     private let onRescan: () -> Void
+    private let onAbout: () -> Void
+    private let onCheckUpdates: () -> Void
     private let onSettings: () -> Void
     private let onQuit: () -> Void
 
     init(
         onPrimaryClick: @escaping () -> Void,
         onRescan: @escaping () -> Void,
+        onAbout: @escaping () -> Void,
+        onCheckUpdates: @escaping () -> Void,
         onSettings: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.onPrimaryClick = onPrimaryClick
         self.onRescan = onRescan
+        self.onAbout = onAbout
+        self.onCheckUpdates = onCheckUpdates
         self.onSettings = onSettings
         self.onQuit = onQuit
         super.init()
@@ -140,6 +202,9 @@ private final class StatusBarController: NSObject {
         menu.addItem(NSMenuItem(title: "打开启动台", action: #selector(openLauncher), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "重新扫描应用", action: #selector(rescanApps), keyEquivalent: ""))
         menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "关于启动台", action: #selector(openAbout), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "检查更新...", action: #selector(checkUpdates), keyEquivalent: ""))
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "设置", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "退出", action: #selector(quit), keyEquivalent: "q"))
@@ -159,6 +224,14 @@ private final class StatusBarController: NSObject {
 
     @objc private func rescanApps() {
         onRescan()
+    }
+
+    @objc private func openAbout() {
+        onAbout()
+    }
+
+    @objc private func checkUpdates() {
+        onCheckUpdates()
     }
 
     @objc private func openSettings() {

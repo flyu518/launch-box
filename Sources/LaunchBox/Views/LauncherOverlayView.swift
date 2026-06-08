@@ -66,6 +66,7 @@ struct LauncherOverlayView: View {
                     store: store,
                     activeDrag: $activeDrag,
                     onOpenApp: onClose,
+                    onBlankClick: onClose,
                     onCustomDrop: handleCustomDrop(dragID:at:),
                     onSectionSwipe: { direction in
                         withAnimation(.snappy(duration: 0.18)) {
@@ -218,6 +219,7 @@ struct LauncherOverlayView: View {
         }
         .foregroundStyle(.primary)
         .frame(height: 54)
+        .background(blankDismissArea)
     }
 
     private var categoryStrip: some View {
@@ -300,6 +302,30 @@ struct LauncherOverlayView: View {
             .padding(.vertical, 2)
         }
         .frame(height: 36)
+        .background(blankDismissArea)
+    }
+
+    private var blankDismissArea: some View {
+        Color.black.opacity(0.001)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("launcherOverlay"))
+                    .onEnded { value in
+                        guard activeDrag == nil,
+                              categoryDrag == nil,
+                              isPrimaryClickOrReleased,
+                              abs(value.translation.width) < 4,
+                              abs(value.translation.height) < 4 else {
+                            return
+                        }
+
+                        onClose()
+                    }
+            )
+    }
+
+    private var isPrimaryClickOrReleased: Bool {
+        NSEvent.pressedMouseButtons == 0 || NSEvent.pressedMouseButtons & 1 == 1
     }
 
     @ViewBuilder

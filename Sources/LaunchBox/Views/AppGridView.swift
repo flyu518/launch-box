@@ -45,6 +45,7 @@ struct AppGridView: View {
     @ObservedObject var store: LaunchStore
     @Binding var activeDrag: LauncherDragState?
     let onOpenApp: () -> Void
+    let onBlankClick: () -> Void
     let onCustomDrop: (String, CGPoint) -> Bool
     let onSectionSwipe: (SectionNavigationDirection) -> Void
 
@@ -89,6 +90,7 @@ struct AppGridView: View {
                 ScrollWheelSectionSwitcher(onSwipe: onSectionSwipe)
             }
             .simultaneousGesture(blankMouseSectionDragGesture)
+            .simultaneousGesture(blankClickDismissGesture)
         }
         .onAppear {
             KeyboardCommandRouter.shared.handler = { event in
@@ -707,6 +709,32 @@ struct AppGridView: View {
 
                 onSectionSwipe(horizontal < 0 ? .next : .previous)
             }
+    }
+
+    private var blankClickDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("launcherOverlay"))
+            .onEnded { value in
+                guard activeDrag == nil,
+                      openedFolderID == nil,
+                      isLeftClickWithoutMeaningfulMovement(value),
+                      !startsInsideEntry(value.startLocation) else {
+                    return
+                }
+
+                onBlankClick()
+            }
+    }
+
+    private func isLeftClickWithoutMeaningfulMovement(_ value: DragGesture.Value) -> Bool {
+        guard isPrimaryClickOrReleased else {
+            return false
+        }
+
+        return abs(value.translation.width) < 4 && abs(value.translation.height) < 4
+    }
+
+    private var isPrimaryClickOrReleased: Bool {
+        NSEvent.pressedMouseButtons == 0 || NSEvent.pressedMouseButtons & 1 == 1
     }
 
     private func startsInsideEntry(_ location: CGPoint) -> Bool {
