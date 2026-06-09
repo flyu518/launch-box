@@ -6,7 +6,7 @@ PRODUCT_NAME="LaunchBox"
 APP_DISPLAY_NAME="启动台"
 BUNDLE_ID="dev.local.launch-box"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="0.0.2"
+APP_VERSION="0.0.3"
 APP_BUILD="1"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
