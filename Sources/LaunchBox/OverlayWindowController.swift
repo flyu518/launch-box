@@ -3,8 +3,18 @@ import QuartzCore
 import SwiftUI
 
 @MainActor
+final class OverlayPresentationState: ObservableObject {
+    @Published private(set) var searchFocusRequest = 0
+
+    func requestSearchFocus() {
+        searchFocusRequest += 1
+    }
+}
+
+@MainActor
 final class OverlayWindowController {
     private var window: LauncherOverlayWindow?
+    private let presentationState = OverlayPresentationState()
     private let store: LaunchStore
     private let transitionDuration: TimeInterval = 0.24
     private let hiddenContentScale: CGFloat = 0.985
@@ -31,6 +41,7 @@ final class OverlayWindowController {
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(window.contentView)
             fadeIn(window)
+            requestSearchFocus()
             return
         }
 
@@ -59,7 +70,10 @@ final class OverlayWindowController {
         window.hasShadow = false
         window.alphaValue = 0
         window.contentView = NSHostingView(
-            rootView: LauncherOverlayView(store: store) { [weak self, weak window] in
+            rootView: LauncherOverlayView(
+                store: store,
+                presentationState: presentationState
+            ) { [weak self, weak window] in
                 self?.hide(window)
             }
         )
@@ -72,6 +86,7 @@ final class OverlayWindowController {
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(window.contentView)
         fadeIn(window)
+        requestSearchFocus()
     }
 
     func hide(_ targetWindow: NSWindow? = nil) {
@@ -127,6 +142,12 @@ final class OverlayWindowController {
     private var currentScreenFrame: NSRect {
         let screen = NSScreen.main ?? NSScreen.screens.first
         return screen?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+    }
+
+    private func requestSearchFocus() {
+        DispatchQueue.main.async { [presentationState] in
+            presentationState.requestSearchFocus()
+        }
     }
 
     private func prepareContentLayer(for targetWindow: NSWindow) {

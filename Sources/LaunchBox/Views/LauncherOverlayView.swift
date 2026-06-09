@@ -38,6 +38,7 @@ enum LauncherDropTarget: Hashable {
 
 struct LauncherOverlayView: View {
     @ObservedObject var store: LaunchStore
+    @ObservedObject var presentationState: OverlayPresentationState
     let onClose: () -> Void
 
     @StateObject private var iconCache = IconCache()
@@ -92,9 +93,10 @@ struct LauncherOverlayView: View {
             categoryControlFrames = frames
         }
         .onAppear {
-            DispatchQueue.main.async {
-                searchFocused = true
-            }
+            focusSearchField()
+        }
+        .onChange(of: presentationState.searchFocusRequest) { _, _ in
+            focusSearchField()
         }
         .onExitCommand {
             if store.query.isEmpty {
@@ -348,6 +350,12 @@ struct LauncherOverlayView: View {
 
     private var isPrimaryClickOrReleased: Bool {
         NSEvent.pressedMouseButtons == 0 || NSEvent.pressedMouseButtons & 1 == 1
+    }
+
+    private func focusSearchField() {
+        DispatchQueue.main.async {
+            searchFocused = true
+        }
     }
 
     private func startsInsideCategoryControl(_ location: CGPoint) -> Bool {
