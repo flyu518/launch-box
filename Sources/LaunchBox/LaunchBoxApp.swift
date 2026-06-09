@@ -35,6 +35,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
     private var settingsWindowController: SettingsWindowController?
     private var aboutWindowController: AboutWindowController?
+    private var didHandleInitialActivation = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -62,6 +63,17 @@ final class AppCoordinator: NSObject, NSApplicationDelegate {
             }
         )
         reloadHotKey()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard !didHandleInitialActivation else {
+            return
+        }
+
+        didHandleInitialActivation = true
+        DispatchQueue.main.async { [weak self] in
+            self?.showOverlay()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
