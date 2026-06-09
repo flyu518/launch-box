@@ -27,17 +27,15 @@ final class OverlayWindowController {
         if let window {
             transitionGeneration += 1
             NSApp.activate(ignoringOtherApps: true)
+            window.setFrame(currentScreenFrame, display: true)
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(window.contentView)
             fadeIn(window)
             return
         }
 
-        let screen = NSScreen.main ?? NSScreen.screens.first
-        let frame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
-
         let window = LauncherOverlayWindow(
-            contentRect: frame,
+            contentRect: currentScreenFrame,
             styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -122,9 +120,13 @@ final class OverlayWindowController {
                 targetWindow.orderOut(nil)
                 targetWindow.alphaValue = 1
                 self.setContentScale(self.visibleContentScale, for: targetWindow, animated: false)
-                self.window = nil
             }
         }
+    }
+
+    private var currentScreenFrame: NSRect {
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        return screen?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
     }
 
     private func prepareContentLayer(for targetWindow: NSWindow) {

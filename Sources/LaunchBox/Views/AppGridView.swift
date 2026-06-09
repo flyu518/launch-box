@@ -60,23 +60,31 @@ struct AppGridView: View {
     @State private var entryTargetFrames: [String: CGRect] = [:]
     @State private var mouseDragEntryID: GridEntry.ID?
     @State private var selectedEntryID: GridEntry.ID?
+    @State private var renderedEntryLimit = 48
 
     private let columns = [
         GridItem(.adaptive(minimum: 104, maximum: 132), spacing: 22)
     ]
+    private let initialRenderedEntryLimit = 48
+    private let renderBatchSize = 48
+    private let renderBatchDelay: UInt64 = 12_000_000
+    private let launchAfterDismissDelay: UInt64 = 280_000_000
 
     var body: some View {
+        let activeEntries = store.activeEntries
+        let visibleEntries = renderedEntries(from: activeEntries)
+
         VStack(alignment: .leading, spacing: 16) {
-            header
+            header(totalCount: appCount(in: activeEntries))
 
             ScrollView {
-                if store.activeEntries.isEmpty {
+                if activeEntries.isEmpty {
                     emptyState
                         .frame(maxWidth: .infinity)
                         .padding(.top, 92)
                 } else {
                     LazyVGrid(columns: columns, spacing: 24) {
-                        ForEach(store.activeEntries) { entry in
+                        ForEach(visibleEntries) { entry in
                             entryView(entry)
                                 .entryDropTarget(entry.id)
                         }
@@ -103,11 +111,14 @@ struct AppGridView: View {
         .onPreferenceChange(GridEntryFramePreferenceKey.self) { frames in
             entryTargetFrames = frames
         }
-        .onChange(of: store.activeEntries) { _, entries in
+        .onChange(of: activeEntries) { _, entries in
             if let selectedEntryID, entries.contains(where: { $0.id == selectedEntryID }) {
                 return
             }
             selectedEntryID = entries.first?.id
+        }
+        .task(id: renderBatchKey(for: activeEntries)) {
+            await renderEntriesInBatches(activeEntries)
         }
         .alert("新建分类并加入", isPresented: categoryPromptBinding) {
             TextField("分类名称", text: $newCategoryName)
@@ -215,14 +226,14 @@ struct AppGridView: View {
         }
     }
 
-    private var header: some View {
+    private func header(totalCount: Int) -> some View {
         HStack {
             Text(title)
                 .font(.system(size: 28, weight: .bold))
 
             Spacer()
 
-            Text("\(store.activeEntries.count)")
+            Text("\(totalCount)")
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
@@ -240,6 +251,78 @@ struct AppGridView: View {
             return store.categoryName(id: categoryID)
         default:
             return store.activeSection.title
+        }
+    }
+
+    private func appCount(in entries: [GridEntry]) -> Int {
+        entries.reduce(0) { count, entry in
+            if entry.app != nil {
+                return count + 1
+            }
+            return count + entry.folderApps.count
+        }
+    }
+
+    private func renderedEntries(from entries: [GridEntry]) -> [GridEntry] {
+        guard shouldRenderInBatches(entries) else {
+            return entries
+        }
+
+        return Array(entries.prefix(renderedEntryLimit))
+    }
+
+    private func shouldRenderInBatches(_ entries: [GridEntry]) -> Bool {
+        entries.count > initialRenderedEntryLimit
+            && store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func renderBatchKey(for entries: [GridEntry]) -> String {
+        [
+            sectionBatchKey,
+            store.query,
+            String(entries.count),
+            entries.first?.id ?? "",
+            entries.last?.id ?? ""
+        ].joined(separator: "|")
+    }
+
+    private var sectionBatchKey: String {
+        switch store.activeSection {
+        case .all:
+            return "all"
+        case .favorites:
+            return "favorites"
+        case .recent:
+            return "recent"
+        case .uncategorized:
+            return "uncategorized"
+        case .category(let categoryID):
+            return "category-\(categoryID)"
+        case .hidden:
+            return "hidden"
+        }
+    }
+
+    private func renderEntriesInBatches(_ entries: [GridEntry]) async {
+        guard shouldRenderInBatches(entries) else {
+            renderedEntryLimit = Int.max
+            return
+        }
+
+        renderedEntryLimit = min(initialRenderedEntryLimit, entries.count)
+
+        while renderedEntryLimit < entries.count {
+            do {
+                try await Task.sleep(nanoseconds: renderBatchDelay)
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            renderedEntryLimit = min(renderedEntryLimit + renderBatchSize, entries.count)
         }
     }
 
@@ -347,10 +430,7 @@ struct AppGridView: View {
         .onTapGesture {
             selectedEntryID = entry.id
             if let app = entry.app {
-                onOpenApp()
-                if !store.open(app) {
-                    showFeedback("无法打开“\(app.name)”")
-                }
+                openAppAfterDismiss(app)
             } else if let folder = entry.folder {
                 openedFolderID = folder.id
                 folderRenameText = folder.name
@@ -629,10 +709,7 @@ struct AppGridView: View {
         }
 
         if let app = entry.app {
-            onOpenApp()
-            if !store.open(app) {
-                showFeedback("无法打开“\(app.name)”")
-            }
+            openAppAfterDismiss(app)
         } else if let folder = entry.folder {
             openedFolderID = folder.id
             folderRenameText = folder.name
@@ -883,10 +960,7 @@ struct AppGridView: View {
             Divider()
 
             Button("在 Finder 中显示") {
-                onOpenApp()
-                if !AppLauncher.revealInFinder(app) {
-                    showFeedback("无法在 Finder 中显示“\(app.name)”")
-                }
+                revealInFinderAfterDismiss(app)
             }
         } else {
             Button("打开文件夹") {
@@ -982,6 +1056,32 @@ struct AppGridView: View {
             }
         }
     }
+
+    private func openAppAfterDismiss(_ app: LaunchApp) {
+        onOpenApp()
+
+        Task {
+            try? await Task.sleep(nanoseconds: launchAfterDismissDelay)
+            await MainActor.run {
+                if !store.open(app) {
+                    showFeedback("无法打开“\(app.name)”")
+                }
+            }
+        }
+    }
+
+    private func revealInFinderAfterDismiss(_ app: LaunchApp) {
+        onOpenApp()
+
+        Task {
+            try? await Task.sleep(nanoseconds: launchAfterDismissDelay)
+            await MainActor.run {
+                if !AppLauncher.revealInFinder(app) {
+                    showFeedback("无法在 Finder 中显示“\(app.name)”")
+                }
+            }
+        }
+    }
 }
 
 private struct FolderContentsView: View {
@@ -1003,6 +1103,7 @@ private struct FolderContentsView: View {
     private let columns = [
         GridItem(.adaptive(minimum: 96, maximum: 120), spacing: 18)
     ]
+    private let launchAfterDismissDelay: UInt64 = 280_000_000
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -1049,10 +1150,7 @@ private struct FolderContentsView: View {
                         }
                     }
                     .onTapGesture {
-                        onOpenApp()
-                        if !store.open(app) {
-                            onFeedback("无法打开“\(app.name)”")
-                        }
+                        openAppAfterDismiss(app)
                     }
                 }
             }
@@ -1139,6 +1237,19 @@ private struct FolderContentsView: View {
                     onMoveOut(app)
                 }
             }
+    }
+
+    private func openAppAfterDismiss(_ app: LaunchApp) {
+        onOpenApp()
+
+        Task {
+            try? await Task.sleep(nanoseconds: launchAfterDismissDelay)
+            await MainActor.run {
+                if !store.open(app) {
+                    onFeedback("无法打开“\(app.name)”")
+                }
+            }
+        }
     }
 }
 
