@@ -12,7 +12,7 @@ enum AppMetadata {
     }
 
     static var version: String {
-        bundleString(for: "CFBundleShortVersionString") ?? "0.0.5"
+        bundleString(for: "CFBundleShortVersionString") ?? "0.0.6"
     }
 
     static var build: String {
