@@ -207,18 +207,15 @@ final class LaunchStore: ObservableObject {
             return
         }
 
-        let targetIndex: Int
+        let offset: Int
         switch direction {
         case .previous:
-            targetIndex = max(sections.startIndex, currentIndex - 1)
+            offset = -1
         case .next:
-            targetIndex = min(sections.index(before: sections.endIndex), currentIndex + 1)
+            offset = 1
         }
 
-        guard targetIndex != currentIndex else {
-            return
-        }
-
+        let targetIndex = (currentIndex + offset + sections.count) % sections.count
         activeSection = sections[targetIndex]
     }
 

@@ -62,6 +62,9 @@ final class OverlayWindowController {
                 store.query = ""
             }
         }
+        window.onMouseNavigation = { [weak self] direction in
+            self?.store.moveActiveSection(direction)
+        }
         window.level = .screenSaver
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         window.hidesOnDeactivate = false
@@ -181,6 +184,7 @@ final class OverlayWindowController {
 
 private final class LauncherOverlayWindow: NSWindow {
     var onEscape: (() -> Void)?
+    var onMouseNavigation: ((SectionNavigationDirection) -> Void)?
 
     override var canBecomeKey: Bool {
         true
@@ -200,6 +204,23 @@ private final class LauncherOverlayWindow: NSWindow {
             return
         }
 
+        if event.type == .otherMouseUp, handleAuxiliaryMouseButton(event) {
+            return
+        }
+
         super.sendEvent(event)
+    }
+
+    private func handleAuxiliaryMouseButton(_ event: NSEvent) -> Bool {
+        switch event.buttonNumber {
+        case 3:
+            onMouseNavigation?(.previous)
+            return true
+        case 4:
+            onMouseNavigation?(.next)
+            return true
+        default:
+            return false
+        }
     }
 }
